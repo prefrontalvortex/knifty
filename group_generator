@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Name:        module1
+# Name:        group_generator.py
 # Purpose:
 #
 # Author:      Michael
@@ -13,10 +13,10 @@ import random as rand
 import knifty as niftynet
 import sys
 
-indim = 2
+indim = 2 #Input dimensions
 hiddim = 12
 outdim = 1
-trainsize = 1000000
+trainsize = 1000000 #Number of training trials
 
 def perc_done(i,total):
     if i%(total/100) == 0:
