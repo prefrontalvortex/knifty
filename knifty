@@ -1,0 +1,172 @@
+import random as rand
+from itertools import izip
+
+
+class Neuron(object):
+    _ACTIV = 1
+    _INACTIV = 0
+    _dopamine = 0 #soon, we shall use this
+    _wtLower = -(2**16-1)
+    _wtUpper = 2**16 -1
+    """This is the heart of the NFTWTN. Neurons that fire together, wire together
+    This will likely need to be heavily tweaked over time to achieve Hebbian
+    behavior.
+    Right now, the rule is:
+    Neuron fires: Participating input neurons get weight boost, nonparticipants
+    get slight buck.
+    Neuron doesn't fire: Participating input neurons get slight buck, nonparticipants
+    get slight boost.
+
+    """
+    _delta11 = 10 #neuron fires, increment weight of participants
+    _delta10 = -8 #neuron fires, decrement weight of nonparticipants
+    _delta01 = -2 #neuron not fired, decrement weight of participants
+    _delta00 = 2 #neuron not fired, increment weight of nonparticipants
+    _delta = [[_delta00,_delta01],[_delta10,_delta11]]
+    _dThresh = 10 #value of threshold adjustment
+
+    def __init__(self):
+        self.thresh = 2**16 -1
+        self.activ = self._INACTIV
+        self.inNodes = []
+        self.outNodes = []
+        self.inWeights = [] #not making this a dict could be a mistake
+        self.stimulus = 0
+        self.cyclesSinceFiring = 0
+        #the weight list is ordered and matched to the inNodes list
+
+    def activate(self,adjustWts=True):
+        accu = 0
+        accu += self.stimulus
+        for node,weight in izip(self.inNodes,self.inWeights):
+            accu += node.activ * weight
+        #for i in xrange(len(self.inNodes)):
+        #    accu += self.inNodes[i].activ * self.inWeights[i]
+        #flip activ on or off
+        self.activ = self._ACTIV if (accu > self.thresh) else self._INACTIV
+        if adjustWts:
+            self.bactivate()
+
+    def bactivate(self):
+        self.hebbify()
+
+    def get_delta(self,neuron_fired, in_fired):
+        """prolly redundant"""
+        n = 1 if (neuron_fired > 0) else 0
+        x = 1 if (in_fired > 0) else 0
+        return self._delta[n][x]
+
+    def hebbify(self):
+        """Apply Hebbian learning protocol to input neurons"""
+        n = 1 if (self.activ > 0) else 0
+        for node,weight in izip(self.inNodes,self.inWeights):
+            x = 1 if (node.activ > 0) else 0
+            weight += self._delta[n][x]
+        if n:
+            self.cyclesSinceFiring = 0
+            self.thresh += self._dThresh
+        else:
+            self.cyclesSinceFiring += 1
+            self.thresh -= self._dThresh * self.cyclesSinceFiring
+
+    def init_weights(self):
+        for node in self.inNodes:
+            self.inWeights.append(rand.randint(self._wtLower,self._wtUpper))
+
+    def set_inNodes(self,nodelist):
+        self.inNodes = nodelist
+
+    def set_outNodes(self,nodelist):
+        self.outNodes = nodelist
+
+    def sound_off(self):
+        print hex(id(self))
+
+class Layer(object):
+    layer_idx = 0
+    #nodes = [] #This does weird things. For some reason, causes all class instances to get all nodes
+    _backprop_on = False
+    _adjustOnForward = True
+    _printout = False
+
+    def __init__(self,n_nodes=3,neuron_class=Neuron):
+        self.nodes = []
+        self._neuron_class = neuron_class
+        self.make_nodes(n_nodes)
+        self.inLayers = [] #one input for now
+        self.outLayers = []
+        self.output = []
+
+    def stimulate(self,stimVector):
+        """Stimulate a layer with a stimulus vector. Vector size must match
+        the layer size. Then, propagate that activation through the network
+        """
+        if not (len(stimVector) == len(self.nodes)):
+            raise Exception( "Stimulus vector length error\
+        - vector must match number of neurons in layer")
+        else:
+            for node,stimulus in izip(self.nodes,stimVector):
+                node.stimulus = stimulus
+            self.propagate()
+
+    def propagate(self):
+        #this might be a nice place for tail recursion. or not.
+        for node in self.nodes:
+            node.activate(self._adjustOnForward)
+        for layer in self.outLayers:
+            layer.propagate()
+        if len(self.outLayers) == 0:
+            self.output = self.get_activ_state()
+            if self._printout: print self.output
+
+    def backprop(self):
+        for node in self.nodes:
+            node.bactivate()
+        for layer in self.inLayers:
+            layer.backprop()
+
+    def get_activ_state(self):
+        return [node.activ for node in self.nodes]
+
+    def make_nodes(self,n_nodes):
+        for i in xrange(n_nodes):
+            self.nodes.append(self._neuron_class())
+
+    def iternodes(self):
+        for node in self.nodes:
+            yield node
+
+    def connect_inLayer(self,inLayer):
+        self.inLayers.append(inLayer)
+        inLayer.connect_outLayer(self) #connect back
+        for node in self.iternodes():
+            node.inNodes = inLayer.nodes
+            node.init_weights()
+
+    def connect_outLayer(self,outLayer):
+        self.outLayers.append(outLayer)
+
+    def peek_thresh(self):
+        for node in self.nodes:
+            print node.thresh
+
+class Net(object):
+    def __init__(self,sizeTuple,layer_class=Layer):
+        self._layer_class = layer_class
+        self.layers = []
+        self.make_layers(sizeTuple)
+
+    def make_layers(self,sizeTuple):
+        for sz in sizeTuple:
+            self.layers.append(self._layer_class(sz))
+        for i,layer in enumerate(self.layers[1:],1):
+            layer.connect_inLayer(self.layers[i-1])
+
+    def stimulate(self,stimVector):
+        self.layers[0].stimulate(stimVector)
+
+    def backprop(self):
+        self.layers[-1].backprop()
+
+    def get_activ_state(self):
+        return self.layers[-1].get_activ_state()
