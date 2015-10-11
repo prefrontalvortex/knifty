@@ -1,0 +1,51 @@
+#-------------------------------------------------------------------------------
+# Name:        module1
+# Purpose:
+#
+# Author:      Michael
+#
+# Created:     10/10/2015
+# Copyright:   (c) Michael 2015
+# Licence:     <your licence>
+#-------------------------------------------------------------------------------
+
+import random as rand
+import knifty as niftynet
+import sys
+
+indim = 2
+hiddim = 12
+outdim = 1
+trainsize = 1000000
+
+def perc_done(i,total):
+    if i%(total/100) == 0:
+        j = i/(total/100)
+        sys.stdout.write("\r%d%%" % j)
+        sys.stdout.flush()
+
+def make_cluster(dim=2,groups=2,locus=1000,delta=200,sigma=30):
+    group = rand.randint(0,groups-1)
+    coord = []
+    for i in xrange(dim):
+        coord.append(int(rand.gauss(locus + delta*group,sigma)))
+    return coord,group
+
+
+net = niftynet.Net((indim,hiddim,outdim))
+
+for i in xrange(trainsize):
+    perc_done(i,trainsize)
+    coord,group = make_cluster(indim)
+    net.stimulate(coord)
+
+
+def ev():
+    coord,group = make_cluster(indim)
+    net.stimulate(coord)
+    outsauce = net.get_activ_state()
+    print [coord[0]] + outsauce + [group]
+
+print ""
+for i in xrange(1000):
+    ev()
